@@ -1,0 +1,48 @@
+name: Build Android 15 GKI Kernel
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v3
+
+      - name: Set up build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex libssl-dev \
+            libncurses5-dev libncursesw5-dev git wget curl zip unzip python3 \
+            clang lld
+
+      - name: Download AOSP toolchain
+        run: |
+          mkdir -p ~/toolchains
+          cd ~/toolchains
+          # Clang/LLVM toolchain para Android 15
+          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master.tar.gz -O clang.tar.gz
+          tar -xzf clang.tar.gz
+
+      - name: Configure kernel
+        run: |
+          export PATH=~/toolchains/bin:$PATH
+          # Exemplo de defconfig GKI com KVM habilitado
+          make ARCH=arm64 gki_defconfig
+          scripts/config --enable CONFIG_KVM
+          scripts/config --enable CONFIG_KVM_ARM64
+
+      - name: Build kernel
+        run: |
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kernel-build
+          path: arch/arm64/boot/Image.gz-dtb
